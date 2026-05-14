@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Upload, FileText, X, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { api } from "../api"
 
 const ACCEPTED_TYPES = {
     "application/pdf": [".pdf"],
@@ -36,12 +37,12 @@ const validateFile = (file) => {
     return null;
 };
 
-// Stub — replace with real upload flow later
-const stubUpload = (file) =>
-    new Promise((resolve) => {
-        console.log("Uploading file:", file.name);
-        setTimeout(resolve, 1500);
-    });
+
+const upload = async (file) => {
+    console.log("Uploading file:", file.name);
+    return await api.upload("user", file.name, file.type, file.size, file)
+}
+
 
 const UploadModal = ({ open, onOpenChange, onUploadComplete }) => {
     const [file, setFile] = useState(null);
@@ -100,9 +101,9 @@ const UploadModal = ({ open, onOpenChange, onUploadComplete }) => {
         if (!file) return;
         setStatus("uploading");
         try {
-            await stubUpload(file);
+            const {documentId, signedUrl} = await upload(file);
             setStatus("success");
-            onUploadComplete?.(file);
+            onUploadComplete?.(documentId);
             // Auto-close after brief success state
             setTimeout(() => handleClose(false), 1000);
         } catch (err) {

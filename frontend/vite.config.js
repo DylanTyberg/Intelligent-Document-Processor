@@ -13,4 +13,17 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  optimizeDeps: {
+    exclude: ['react-pdf'],
+    include: ['pdfjs-dist', 'warning']
+  },
+  // server: {
+  //   proxy: {
+  //     '/api': {
+  //       target: 'https://h34690j75f.execute-api.us-east-1.amazonaws.com/prod',
+  //       changeOrigin: true,
+  //       rewrite: (path) => path.replace(/^\/api/, ''),
+  //     }
+  //   }
+  // }
 })

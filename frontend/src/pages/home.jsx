@@ -38,8 +38,8 @@ const Home = () => {
     const [uploadOpen, setUploadOpen] = useState(false);
     const documents = mockDocuments;
 
-    const handleUploadComplete = (file) => {
-        console.log("Refresh document list", file);
+    const handleUploadComplete = (documentId) => {
+        console.log("Refresh document list", documentId);
         // Later: refetch documents, or optimistically add a pending card
     };
 

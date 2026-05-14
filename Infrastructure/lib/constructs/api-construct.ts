@@ -165,7 +165,7 @@ export class ApiConstruct extends Construct {
 
     // POST /documents — get presigned upload URL + create DynamoDB record
     documents.addMethod("GET", new apigateway.LambdaIntegration(getDocumentsLambda), authOptions);
-    documents.addMethod("POST", new apigateway.LambdaIntegration(uploadLambda), authOptions);
+    documents.addMethod("POST", new apigateway.LambdaIntegration(uploadLambda), {/*authOptions*/});
 
     const singleDocument = documents.addResource("{documentId}");
 

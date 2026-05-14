@@ -25,6 +25,14 @@ export class StorageConstruct extends Construct {
             versioned: true,
             removalPolicy: RemovalPolicy.DESTROY,
             autoDeleteObjects: true,
+            cors: [
+                {
+                    allowedMethods: [s3.HttpMethods.PUT],
+                    allowedOrigins: ['http://localhost:5173'],
+                    allowedHeaders: ['*'],
+                    exposedHeaders: ['ETag'],
+                }
+            ]
         })
 
         this.resultsBucket = new s3.Bucket(this, "ResultsBUcket", {
@@ -32,7 +40,15 @@ export class StorageConstruct extends Construct {
             encryptionKey: this.key,
             versioned: true,
             removalPolicy: RemovalPolicy.DESTROY,
-            autoDeleteObjects: true
+            autoDeleteObjects: true,
+            cors: [
+                {
+                    allowedMethods: [s3.HttpMethods.PUT],
+                    allowedOrigins: ['http://localhost:5173'],
+                    allowedHeaders: ['*'],
+                    exposedHeaders: ['ETag'],
+                }
+            ]
 
         })
 
