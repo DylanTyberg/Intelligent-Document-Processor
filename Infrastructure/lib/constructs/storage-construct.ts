@@ -37,8 +37,8 @@ export class StorageConstruct extends Construct {
         })
 
         this.table = new dynamodb.Table(this, 'Table', {
-            partitionKey: {name: 'user', type: dynamodb.AttributeType.STRING},
-            sortKey: { name: 'processingType#TBD', type:dynamodb.AttributeType.STRING},
+            partitionKey: {name: 'userId', type: dynamodb.AttributeType.STRING},
+            sortKey: { name: 'sortKey', type:dynamodb.AttributeType.STRING},
             billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
             encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
             encryptionKey: this.key,
