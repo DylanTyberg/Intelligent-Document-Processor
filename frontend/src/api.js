@@ -28,4 +28,17 @@ export const  api = {
     });
     return {documentId: data.documentId, signedUrl: data.signedUrl}
   },
+
+  async listDocuments(userId) {
+    const data = await request ("GET", `/documents?userId=${userId}`)
+    return data.Items
+  },
+
+  getDocument: async (id, userId) => {
+    return await request("GET", `/documents/${id}?userId=${userId}`);
+  },
+
+  deleteDocument: async (id, userId, sortKey) => {
+    return await request("DELETE", `/documents/${id}?userId=${userId}&sortKey=${encodeURIComponent(sortKey)}`);
+  },
 };

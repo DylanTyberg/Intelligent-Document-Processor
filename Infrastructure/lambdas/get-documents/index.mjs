@@ -1,10 +1,30 @@
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb"
+import { DynamoDBDocumentClient, GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+
+
+const client = new DynamoDBClient({ region: process.env.AWS_REGION || "us-east-1" });
+const db = DynamoDBDocumentClient.from(client);
+
 export const handler = async (event) => {
   try {
-    // TODO: implement
+
+    const { userId }  = event.queryStringParameters;
+    
+    const { Items }  = await db.send(new QueryCommand({
+      TableName: process.env.TABLE_NAME,
+      KeyConditionExpression: "userId = :pk AND begins_with(sortKey, :sk)",
+      ExpressionAttributeValues: {
+        ":pk": userId,
+        ":sk": "DOC"
+      }
+    }))
+
+    
+
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ message: "not implemented" }),
+      body: JSON.stringify({ Items }),
     };
   } catch (error) {
     console.error(error);

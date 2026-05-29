@@ -26,12 +26,13 @@ export const handler = async (event) => {
 
     const item = {
       userId: userId,
-      sortKey: `DOC#${new Date().toISOString()}#${documentId}`,
+      sortKey: `DOC#${documentId}`,
       key,
       fileName,
       fileType,
       fileSize,
-      status: "pending"
+      status: "pending",
+      uploadedAt: `${new Date().toISOString()}`
     }
 
     await db.send(new PutCommand(

@@ -27,7 +27,7 @@ export class StorageConstruct extends Construct {
             autoDeleteObjects: true,
             cors: [
                 {
-                    allowedMethods: [s3.HttpMethods.PUT],
+                    allowedMethods: [s3.HttpMethods.PUT, s3.HttpMethods.GET, s3.HttpMethods.DELETE],
                     allowedOrigins: ['http://localhost:5173'],
                     allowedHeaders: ['*'],
                     exposedHeaders: ['ETag'],
@@ -43,7 +43,7 @@ export class StorageConstruct extends Construct {
             autoDeleteObjects: true,
             cors: [
                 {
-                    allowedMethods: [s3.HttpMethods.PUT],
+                    allowedMethods: [s3.HttpMethods.PUT, s3.HttpMethods.GET, s3.HttpMethods.DELETE],
                     allowedOrigins: ['http://localhost:5173'],
                     allowedHeaders: ['*'],
                     exposedHeaders: ['ETag'],

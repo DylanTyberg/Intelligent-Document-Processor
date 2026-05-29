@@ -102,6 +102,22 @@ export class ApiConstruct extends Construct {
       },
     });
 
+    const getDocumentLambda = new lambda.Function(
+      this,
+      "GetDocumentLambda",
+      {
+        runtime: lambda.Runtime.NODEJS_20_X,
+        handler: "index.handler",
+        code: lambda.Code.fromAsset("lambdas/get-document"),
+        timeout: Duration.seconds(30),
+        memorySize: 256,
+        environment: {
+          TABLE_NAME: props.table.tableName,
+          UPLOAD_BUCKET: props.uploadBucket.bucketName,
+        },
+      }
+    );
+
     // Updates document metadata
     const updateDocumentLambda = new lambda.Function(
       this,
@@ -148,7 +164,9 @@ export class ApiConstruct extends Construct {
 
     // Get Lambdas need read access
     props.table.grantReadData(getDocumentsLambda);
+    props.table.grantReadData(getDocumentLambda);
     props.table.grantReadData(getResultsLambda);
+    props.uploadBucket.grantRead(getDocumentLambda)
     props.resultsBucket.grantRead(getResultsLambda);
 
     // Update Lambda needs read/write on table
@@ -164,17 +182,17 @@ export class ApiConstruct extends Construct {
     const documents = this.api.root.addResource("documents");
 
     // POST /documents — get presigned upload URL + create DynamoDB record
-    documents.addMethod("GET", new apigateway.LambdaIntegration(getDocumentsLambda), authOptions);
+    documents.addMethod("GET", new apigateway.LambdaIntegration(getDocumentsLambda), {/*authOptions*/});
     documents.addMethod("POST", new apigateway.LambdaIntegration(uploadLambda), {/*authOptions*/});
 
     const singleDocument = documents.addResource("{documentId}");
 
     // GET /documents/{documentId} — get document metadata
-    singleDocument.addMethod("GET", new apigateway.LambdaIntegration(getDocumentsLambda), authOptions);
+    singleDocument.addMethod("GET", new apigateway.LambdaIntegration(getDocumentLambda), {/*authOptions*/});
     // PUT /documents/{documentId} — update document metadata
     singleDocument.addMethod("PUT", new apigateway.LambdaIntegration(updateDocumentLambda), authOptions);
     // DELETE /documents/{documentId} — delete document and all associated data
-    singleDocument.addMethod("DELETE", new apigateway.LambdaIntegration(deleteDocumentLambda), authOptions);
+    singleDocument.addMethod("DELETE", new apigateway.LambdaIntegration(deleteDocumentLambda), {/*authOptions*/});
 
     // POST /documents/{documentId}/process — trigger processing on existing document
     const processResource = singleDocument.addResource("process");

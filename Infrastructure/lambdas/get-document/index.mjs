@@ -1,6 +1,7 @@
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb"
-import { DynamoDBDocumentClient, GetCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb"
-import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3"
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const client = new DynamoDBClient({ region: process.env.AWS_REGION || "us-east-1" });
 const db = DynamoDBDocumentClient.from(client);
@@ -8,16 +9,19 @@ const s3 = new S3Client({ region: process.env.AWS_REGION || "us-east-1" });
 
 export const handler = async (event) => {
   try {
+    const { userId } = event.queryStringParameters;
     const { documentId } = event.pathParameters;
-    const { userId, sortKey } = event.queryStringParameters;
 
-    // Fetch item first to get the S3 key
-    const { Item } = await db.send(new GetCommand({
+    const { Items } = await db.send(new QueryCommand({
       TableName: process.env.TABLE_NAME,
-      Key: { userId, sortKey }
+      KeyConditionExpression: "userId = :pk AND begins_with(sortKey, :sk)",
+      ExpressionAttributeValues: {
+        ":pk": userId,
+        ":sk": "DOC#",
+      },
     }));
 
-    if (!Item) {
+    if (!Items || Items.length === 0) {
       return {
         statusCode: 404,
         headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
@@ -25,22 +29,17 @@ export const handler = async (event) => {
       };
     }
 
-    // Delete from S3
-    await s3.send(new DeleteObjectCommand({
-      Bucket: process.env.UPLOAD_BUCKET,
-      Key: Item.key,
-    }));
+    const item = Items?.find(i => i.sortKey.endsWith(documentId));
 
-    // Delete from DynamoDB
-    await db.send(new DeleteCommand({
-      TableName: process.env.TABLE_NAME,
-      Key: { userId, sortKey }
-    }));
+    const s3Url = await getSignedUrl(s3, new GetObjectCommand({
+      Bucket: process.env.UPLOAD_BUCKET,
+      Key: item.key,
+    }), { expiresIn: 3600 });
 
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ deleted: documentId }),
+      body: JSON.stringify({ ...item, s3Url }),
     };
   } catch (error) {
     console.error(error);

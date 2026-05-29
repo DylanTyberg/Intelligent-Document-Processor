@@ -13,10 +13,11 @@ const formatDate = (iso) => {
 const DocumentCard = ({ document }) => {
     const status = statusConfig[document.status] ?? statusConfig.pending;
     const classification = document.classification ?? "other";
+    const documentId = document.sortKey.split("#")[1];
 
     return (
         <Link
-            to={`/documents/${document.id}`}
+            to={`/documents/${documentId}`}
             className="group block rounded-md border border-border bg-card p-4
                        hover:border-ring hover:bg-accent/50 transition-colors
                        focus:outline-none focus:ring-2 focus:ring-ring"
@@ -24,8 +25,8 @@ const DocumentCard = ({ document }) => {
             {/* Top: filename with icon */}
             <div className="flex items-start gap-2 mb-3">
                 <FileText className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
-                <h3 className="text-sm font-medium text-foreground truncate" title={document.filename}>
-                    {document.filename}
+                <h3 className="text-sm font-medium text-foreground truncate" title={document.fileName}>
+                    {document.fileName}
                 </h3>
             </div>
 

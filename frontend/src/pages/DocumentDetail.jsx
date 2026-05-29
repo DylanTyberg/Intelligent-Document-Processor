@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, ShieldAlert, ShieldCheck, Clock, FileText, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ShieldAlert, ShieldCheck, Clock, FileText, ChevronLeft, ChevronRight, Trash2, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { api } from "@/api";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 
@@ -12,36 +13,6 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
   import.meta.url
 ).toString();
-
-// --- Mock Data ---
-const MOCK_DOCUMENT = {
-  id: "doc-001",
-  name: "Q3-financial-report.pdf",
-  type: "report",
-  status: "ready", // "pending" | "processing" | "ready"
-  uploadedAt: "Apr 28, 2026",
-  pageCount: 4,
-  s3Url: null, // replace with signed URL
-  piiDetection: {
-    status: "complete", // "pending" | "running" | "complete"
-    runAt: "Apr 28, 2026, 2:14 PM",
-    entityCount: 3,
-    riskLevel: "medium", // "none" | "low" | "medium" | "high"
-    entities: [
-      { type: "EMAIL", value: "j.smith@acme.com", confidence: 0.99 },
-      { type: "PHONE", value: "(540) 555-0182", confidence: 0.97 },
-      { type: "NAME", value: "Jonathan Smith", confidence: 0.94 },
-    ],
-  },
-  security: {
-    encrypted: true,
-    kmsKeyId: "arn:aws:kms:us-east-1:123456789:key/abc-123",
-    accessedBy: "user@example.com",
-    lastAccessed: "May 14, 2026, 9:02 AM",
-  },
-};
-
-// --- Sub-components ---
 
 function StatusBadge({ status }) {
   const map = {
@@ -74,6 +45,15 @@ function RiskBadge({ level }) {
 }
 
 function PiiStatusPanel({ pii }) {
+  if (!pii) {
+    return (
+      <div className="flex flex-col items-center justify-center py-10 gap-3 text-gray-500">
+        <Clock className="w-8 h-8" />
+        <p className="text-sm">PII detection not yet run</p>
+      </div>
+    );
+  }
+
   if (pii.status === "pending") {
     return (
       <div className="flex flex-col items-center justify-center py-10 gap-3 text-gray-500">
@@ -138,7 +118,7 @@ function PiiStatusPanel({ pii }) {
   );
 }
 
-function SecurityPanel({ security }) {
+function SecurityPanel({ doc }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between text-sm">
@@ -150,38 +130,85 @@ function SecurityPanel({ security }) {
       </div>
       <Separator className="bg-gray-800" />
       <div className="flex items-center justify-between text-sm">
-        <span className="text-gray-500">KMS Key</span>
-        <span className="text-xs font-mono text-gray-400 truncate max-w-[180px]">
-          {security.kmsKeyId.split("/").pop()}
-        </span>
+        <span className="text-gray-500">File type</span>
+        <span className="text-xs font-mono text-gray-400">{doc.fileType}</span>
       </div>
       <Separator className="bg-gray-800" />
       <div className="flex items-center justify-between text-sm">
-        <span className="text-gray-500">Last accessed</span>
-        <span className="text-gray-400 text-xs">{security.lastAccessed}</span>
+        <span className="text-gray-500">File size</span>
+        <span className="text-gray-400 text-xs">{(doc.fileSize / 1024).toFixed(1)} KB</span>
       </div>
       <Separator className="bg-gray-800" />
       <div className="flex items-center justify-between text-sm">
-        <span className="text-gray-500">Accessed by</span>
-        <span className="text-gray-400 text-xs">{security.accessedBy}</span>
+        <span className="text-gray-500">Uploaded</span>
+        <span className="text-gray-400 text-xs">{new Date(doc.uploadedAt).toLocaleString()}</span>
       </div>
     </div>
   );
 }
 
-// --- Main Page ---
-
 export default function DocumentDetail() {
   const { id } = useParams();
+  console.log(id);
   const navigate = useNavigate();
-  const doc = MOCK_DOCUMENT; // replace with API fetch by id
 
+  const [doc, setDoc] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState(null);
   const [numPages, setNumPages] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
 
+  useEffect(() => {
+    const fetchDocument = async () => {
+      try {
+        setLoading(true);
+        // TODO: replace "user" with real userId from Cognito
+        const data = await api.getDocument(id, "user");
+        setDoc(data);
+      } catch (err) {
+        setError("Failed to load document.");
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDocument();
+  }, [id]);
+
+  const handleDelete = async () => {
+    if (!doc || !window.confirm(`Delete ${doc.fileName}? This cannot be undone.`)) return;
+    try {
+      setDeleting(true);
+      await api.deleteDocument(id, "user", doc.sortKey);
+      navigate(-1);
+    } catch (err) {
+      console.error(err);
+      setDeleting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0d0d0f] flex items-center justify-center">
+        <Loader2 className="w-6 h-6 text-gray-500 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error || !doc) {
+    return (
+      <div className="min-h-screen bg-[#0d0d0f] flex items-center justify-center">
+        <p className="text-sm text-gray-500">{error ?? "Document not found."}</p>
+      </div>
+    );
+  }
+
+  console.log(doc)
+
   return (
     <div className="min-h-screen bg-[#0d0d0f] text-white">
-      {/* Top bar */}
       <header className="flex items-center gap-4 px-6 py-4 border-b border-gray-800">
         <Button
           variant="ghost"
@@ -197,20 +224,26 @@ export default function DocumentDetail() {
 
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <FileText className="w-4 h-4 text-gray-500 shrink-0" />
-          <h1 className="text-sm font-medium text-gray-200 truncate">{doc.name}</h1>
-          <Badge variant="outline" className="text-xs border-gray-700 text-gray-400 shrink-0">
-            {doc.type}
-          </Badge>
+          <h1 className="text-sm font-medium text-gray-200 truncate">{doc.fileName}</h1>
           <StatusBadge status={doc.status} />
         </div>
 
-        <span className="text-xs text-gray-600 shrink-0">Uploaded {doc.uploadedAt}</span>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-red-500 hover:text-red-400 hover:bg-red-950/30 gap-1.5 px-2 shrink-0"
+          onClick={handleDelete}
+          disabled={deleting}
+        >
+          {deleting
+            ? <Loader2 className="w-4 h-4 animate-spin" />
+            : <Trash2 className="w-4 h-4" />
+          }
+          {deleting ? "Deleting..." : "Delete"}
+        </Button>
       </header>
 
-      {/* Split pane */}
       <div className="flex h-[calc(100vh-57px)]">
-
-        {/* Left — PDF viewer */}
         <div className="flex-1 flex flex-col border-r border-gray-800 overflow-hidden">
           <div className="flex-1 overflow-y-auto flex flex-col items-center py-6 px-4 bg-[#111113]">
             {doc.s3Url ? (
@@ -262,20 +295,19 @@ export default function DocumentDetail() {
           )}
         </div>
 
-        {/* Right — Results panel */}
         <div className="w-[360px] shrink-0 flex flex-col overflow-y-auto">
           <div className="p-5 border-b border-gray-800">
             <h2 className="text-xs font-medium text-gray-500 uppercase tracking-widest mb-4">
               PII Detection
             </h2>
-            <PiiStatusPanel pii={doc.piiDetection} />
+            <PiiStatusPanel pii={doc.piiDetection ?? null} />
           </div>
 
           <div className="p-5">
             <h2 className="text-xs font-medium text-gray-500 uppercase tracking-widest mb-4">
               Security
             </h2>
-            <SecurityPanel security={doc.security} />
+            <SecurityPanel doc={doc} />
           </div>
         </div>
       </div>

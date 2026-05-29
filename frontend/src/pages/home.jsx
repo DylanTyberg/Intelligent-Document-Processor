@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Upload } from "lucide-react";
 import DocumentCard from "@/components/DocumentCard";
 import UploadModal from "@/components/UploadModal";
+import { api } from "@/api";
 
 // Temporary mock data — delete when API is wired
 const mockDocuments = [
@@ -36,13 +37,21 @@ const mockDocuments = [
 const Home = () => {
     const [docFilterString, setDocFilterString] = useState("");
     const [uploadOpen, setUploadOpen] = useState(false);
-    const documents = mockDocuments;
+    const [documents, setDocuments] = useState([]);
 
-    const handleUploadComplete = (documentId) => {
-        console.log("Refresh document list", documentId);
-        // Later: refetch documents, or optimistically add a pending card
+    const fetchDocuments = async () => {
+        const data = await api.listDocuments("user");
+        setDocuments(data);
     };
 
+    useEffect(() => {
+        fetchDocuments();
+    }, []);
+
+    const handleUploadComplete = () => {
+        fetchDocuments();
+    };
+    console.log(documents)
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -73,7 +82,7 @@ const Home = () => {
                         </p>
                     </div>
                 ) : (
-                    documents.filter(document => document.filename.includes(docFilterString)).map((doc) => <DocumentCard key={doc.id} document={doc} />)
+                    documents && documents.filter(document => document.fileName.includes(docFilterString)).map((doc) => <DocumentCard key={doc.id} document={doc} />)
                 )}
             </div>
 
