@@ -24,7 +24,8 @@ export class IntelligentDocProcessingStack extends Stack {
             resultsBucket: storage.resultsBucket,
             table: storage.table,
             encryptionKey: storage.key,
-            eventBus: processing.eventBus
+            eventBus: processing.eventBus,
+            piiQueue: processing.piiQueue
         })
     }
 }

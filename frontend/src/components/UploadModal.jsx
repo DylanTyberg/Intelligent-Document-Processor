@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Upload, FileText, X, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { api } from "../api"
+import { useAuth } from "@/context/AuthContext";
 
 const ACCEPTED_TYPES = {
     "application/pdf": [".pdf"],
@@ -38,11 +39,6 @@ const validateFile = (file) => {
 };
 
 
-const upload = async (file) => {
-    console.log("Uploading file:", file.name);
-    return await api.upload("user", file.name, file.type, file.size, file)
-}
-
 
 const UploadModal = ({ open, onOpenChange, onUploadComplete }) => {
     const [file, setFile] = useState(null);
@@ -50,6 +46,7 @@ const UploadModal = ({ open, onOpenChange, onUploadComplete }) => {
     const [status, setStatus] = useState("idle"); // idle | uploading | success
     const [isDragging, setIsDragging] = useState(false);
     const inputRef = useRef(null);
+    const {user} = useAuth();
 
     const reset = () => {
         setFile(null);
@@ -101,10 +98,9 @@ const UploadModal = ({ open, onOpenChange, onUploadComplete }) => {
         if (!file) return;
         setStatus("uploading");
         try {
-            const {documentId, signedUrl} = await upload(file);
+            const { documentId } = await api.upload(user.userId, file.name, file.type, file.size, file);
             setStatus("success");
             onUploadComplete?.(documentId);
-            // Auto-close after brief success state
             setTimeout(() => handleClose(false), 1000);
         } catch (err) {
             setError("Upload failed. Please try again.");

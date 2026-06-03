@@ -39,7 +39,11 @@ export const handler = async (event) => {
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ ...item, s3Url }),
+      body: JSON.stringify({ 
+        ...item, 
+        s3Url,
+        piiDetection: item.piiResults ?? null,
+      }),
     };
   } catch (error) {
     console.error(error);

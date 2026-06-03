@@ -7,6 +7,8 @@ import * as s3 from "aws-cdk-lib/aws-s3";
 import * as kms from "aws-cdk-lib/aws-kms";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as events from "aws-cdk-lib/aws-events";
+import * as sqs from "aws-cdk-lib/aws-sqs";
+import { SqsQueue } from "aws-cdk-lib/aws-events-targets";
 
 interface ApiConstructProps {
   userPool: cognito.UserPool;
@@ -15,6 +17,7 @@ interface ApiConstructProps {
   table: dynamodb.Table;
   encryptionKey: kms.Key;
   eventBus: events.EventBus;
+  piiQueue: sqs.Queue;
 }
 
 export class ApiConstruct extends Construct {
@@ -74,6 +77,7 @@ export class ApiConstruct extends Construct {
       environment: {
         TABLE_NAME: props.table.tableName,
         EVENT_BUS_NAME: props.eventBus.eventBusName,
+        PII_QUEUE_URL: props.piiQueue.queueUrl,
       },
     });
 
@@ -177,6 +181,8 @@ export class ApiConstruct extends Construct {
     props.resultsBucket.grantDelete(deleteDocumentLambda);
     props.table.grantReadWriteData(deleteDocumentLambda);
 
+    props.piiQueue.grantSendMessages(processLambda);
+
     // --- API Routes ---
 
     const documents = this.api.root.addResource("documents");
@@ -196,7 +202,7 @@ export class ApiConstruct extends Construct {
 
     // POST /documents/{documentId}/process — trigger processing on existing document
     const processResource = singleDocument.addResource("process");
-    processResource.addMethod("POST", new apigateway.LambdaIntegration(processLambda), authOptions);
+    processResource.addMethod("POST", new apigateway.LambdaIntegration(processLambda), {/*authOptions*/});
 
     // GET /documents/{documentId}/results — get processing results
     const resultsResource = singleDocument.addResource("results");

@@ -5,6 +5,7 @@ import { Upload } from "lucide-react";
 import DocumentCard from "@/components/DocumentCard";
 import UploadModal from "@/components/UploadModal";
 import { api } from "@/api";
+import { useAuth } from "@/context/AuthContext";
 
 // Temporary mock data — delete when API is wired
 const mockDocuments = [
@@ -38,17 +39,22 @@ const Home = () => {
     const [docFilterString, setDocFilterString] = useState("");
     const [uploadOpen, setUploadOpen] = useState(false);
     const [documents, setDocuments] = useState([]);
+    const {user} = useAuth();
 
     const fetchDocuments = async () => {
-        const data = await api.listDocuments("user");
+        console.log("fetching for user:", user?.userId);
+        const data = await api.listDocuments(user.userId);
+        console.log("documents:", data);
         setDocuments(data);
     };
 
     useEffect(() => {
+        if (!user) return;
         fetchDocuments();
-    }, []);
+    }, [user]);
 
     const handleUploadComplete = () => {
+        if (!user) return;
         fetchDocuments();
     };
     console.log(documents)

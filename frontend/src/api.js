@@ -1,8 +1,14 @@
+import { fetchAuthSession } from "aws-amplify/auth";
+
 async function request(method, path, body) {
+  const session = await fetchAuthSession();
+  const token = session.tokens?.idToken?.toString();
+
   const res = await fetch(`${import.meta.env.VITE_API_URL}${path}`, {
     method,
     headers: {
       "Content-Type": "application/json",
+      ...(token && { Authorization: `Bearer ${token}` }),
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -40,5 +46,9 @@ export const  api = {
 
   deleteDocument: async (id, userId, sortKey) => {
     return await request("DELETE", `/documents/${id}?userId=${userId}&sortKey=${encodeURIComponent(sortKey)}`);
+  },
+
+  processDocument: async (id, userId, processingType) => {
+    return await request("POST", `/documents/${id}/process`, { userId, processingType });
   },
 };

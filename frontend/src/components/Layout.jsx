@@ -1,7 +1,17 @@
-import { Outlet, Link } from "react-router-dom";
+import { Outlet, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 const Layout = () => {
+    const navigate = useNavigate();
+    const { user, loading, logout } = useAuth();
+
+    const handleSignOut = async () => {
+        await logout();
+        navigate("/signin");
+    };
+
     return (
         <div className="min-h-screen bg-background text-foreground">
             <header className="border-b border-border">
@@ -10,9 +20,25 @@ const Layout = () => {
                         DocPlatform
                     </Link>
                     <div className="flex items-center gap-3">
-                        <Button variant="ghost" size="sm">
-                            Sign in
-                        </Button>
+                        {loading ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
+                        ) : user ? (
+                            <>
+                                <span className="text-sm text-gray-500">{user.signInDetails?.loginId}</span>
+                                <Button variant="ghost" size="sm" onClick={handleSignOut}>
+                                    Sign out
+                                </Button>
+                            </>
+                        ) : (
+                            <>
+                                <Button variant="ghost" size="sm" onClick={() => navigate("/signin")}>
+                                    Sign in
+                                </Button>
+                                <Button size="sm" onClick={() => navigate("/signup")}>
+                                    Sign up
+                                </Button>
+                            </>
+                        )}
                     </div>
                 </div>
             </header>

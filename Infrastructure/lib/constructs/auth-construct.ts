@@ -1,6 +1,7 @@
 import { Construct } from "constructs";
 import { Duration } from "aws-cdk-lib";
 import * as cognito from "aws-cdk-lib/aws-cognito";
+import { CfnOutput } from "aws-cdk-lib";
 
 
 export class AuthConstruct extends Construct {
@@ -38,5 +39,5 @@ export class AuthConstruct extends Construct {
         })
 
     }
-
+    
 }
