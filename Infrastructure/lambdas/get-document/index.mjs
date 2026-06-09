@@ -9,7 +9,7 @@ const s3 = new S3Client({ region: process.env.AWS_REGION || "us-east-1" });
 
 export const handler = async (event) => {
   try {
-    const { userId } = event.queryStringParameters;
+    const userId = event.requestContext.authorizer.claims.sub;
     const { documentId } = event.pathParameters;
 
     const { Items } = await db.send(new QueryCommand({
@@ -36,12 +36,22 @@ export const handler = async (event) => {
       Key: item.key,
     }), { expiresIn: 3600 });
 
+    // Generate signed URL for redacted PDF if it exists
+    let redactedS3Url = null;
+    if (item.redactionResults?.status === "complete" && item.redactionResults?.redactedKey) {
+      redactedS3Url = await getSignedUrl(s3, new GetObjectCommand({
+        Bucket: process.env.RESULTS_BUCKET,
+        Key: item.redactionResults.redactedKey,
+      }), { expiresIn: 3600 });
+    }
+
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ 
-        ...item, 
+      body: JSON.stringify({
+        ...item,
         s3Url,
+        redactedS3Url,
         piiDetection: item.piiResults ?? null,
       }),
     };

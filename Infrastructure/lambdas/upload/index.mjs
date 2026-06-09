@@ -12,8 +12,8 @@ export const handler = async (event) => {
   
   
   try {
-    //TODO const userId = event.requestContext.authorizer.claims.sub;
-    const {userId, fileName, fileType, fileSize} = JSON.parse(event.body);
+    const userId = event.requestContext.authorizer.claims.sub;
+    const {fileName, fileType, fileSize} = JSON.parse(event.body);
     const documentId = crypto.randomUUID();
     const key = `uploads/${userId}/${documentId}/${fileName}`
 

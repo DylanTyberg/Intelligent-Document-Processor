@@ -9,7 +9,8 @@ const s3 = new S3Client({ region: process.env.AWS_REGION || "us-east-1" });
 export const handler = async (event) => {
   try {
     const { documentId } = event.pathParameters;
-    const { userId, sortKey } = event.queryStringParameters;
+    const {sortKey } = event.queryStringParameters;
+    const userId = event.requestContext.authorizer.claims.sub;
 
     // Fetch item first to get the S3 key
     const { Item } = await db.send(new GetCommand({
