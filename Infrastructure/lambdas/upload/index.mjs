@@ -8,6 +8,15 @@ const db = DynamoDBDocumentClient.from(client);
 
 const s3 = new S3Client({region: process.env.AWS_REGION || "us-east-1"})
 
+const sanitizeFileName = (name) => {
+  const ext = name.includes('.') ? `.${name.split('.').pop()}` : '';
+  const base = name.slice(0, name.length - ext.length);
+  return base
+    .replace(/\s+/g, '_')           // spaces → underscores
+    .replace(/[^a-zA-Z0-9._\-]/g, '') // remove anything else special
+    + ext;
+};
+
 export const handler = async (event) => {
   
   
@@ -15,7 +24,8 @@ export const handler = async (event) => {
     const userId = event.requestContext.authorizer.claims.sub;
     const {fileName, fileType, fileSize} = JSON.parse(event.body);
     const documentId = crypto.randomUUID();
-    const key = `uploads/${userId}/${documentId}/${fileName}`
+    const sanitizedFileName = sanitizeFileName(fileName);
+    const key = `uploads/${userId}/${documentId}/${sanitizedFileName}`;
 
     const command = new PutObjectCommand({
       Bucket: process.env.UPLOAD_BUCKET,
@@ -25,14 +35,14 @@ export const handler = async (event) => {
     const signedUrl = await getSignedUrl(s3, command, {expiresIn: 300})
 
     const item = {
-      userId: userId,
+      userId,
       sortKey: `DOC#${documentId}`,
-      key,
-      fileName,
+      key,                    // sanitized key
+      fileName,               // original display name
       fileType,
       fileSize,
       status: "pending",
-      uploadedAt: `${new Date().toISOString()}`
+      uploadedAt: new Date().toISOString(),
     }
 
     await db.send(new PutCommand(
