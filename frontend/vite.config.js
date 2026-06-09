@@ -17,6 +17,10 @@ export default defineConfig({
     exclude: ['react-pdf'],
     include: ['pdfjs-dist', 'warning']
   },
+  server: {
+    host: '127.0.0.1', // IPv4 instead of ::1
+    port: 3000,
+  }
   // server: {
   //   proxy: {
   //     '/api': {

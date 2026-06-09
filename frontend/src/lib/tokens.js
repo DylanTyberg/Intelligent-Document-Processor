@@ -16,6 +16,6 @@ export const piiSeverityColor = {
 export const statusConfig = {
     pending: { label: "Pending", color: "text-status-pending", dot: "bg-status-pending" },
     processing: { label: "Processing", color: "text-status-processing", dot: "bg-status-processing animate-pulse" },
-    completed: { label: "Ready", color: "text-status-success", dot: "bg-status-success" },
+    complete: { label: "Ready", color: "text-status-success", dot: "bg-status-success" },
     failed: { label: "Failed", color: "text-status-error", dot: "bg-status-error" },
 };

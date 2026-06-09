@@ -15,6 +15,12 @@ const DocumentCard = ({ document }) => {
     const classification = document.classification ?? "other";
     const documentId = document.sortKey.split("#")[1];
 
+
+    const analysisCount = [
+        document.piiDetection?.status === "complete",
+        document.summarizationResults?.status === "complete",
+        document.classificationResults?.status === "complete",
+        ].filter(Boolean).length;
     return (
         <Link
             to={`/documents/${documentId}`}
@@ -48,7 +54,7 @@ const DocumentCard = ({ document }) => {
             <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>{formatDate(document.uploadedAt)}</span>
                 <span>
-                    {document.analysisCount} {document.analysisCount === 1 ? "analysis" : "analyses"}
+                    {analysisCount} {analysisCount === 1 ? "analysis" : "analyses"}
                 </span>
             </div>
         </Link>

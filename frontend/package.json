@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "predeploy": "npm run build",
+    "deploy": "aws s3 sync dist/ s3://intelligentdocprocessings-frontendsitebucket177cee-sqkw7okkxkpd --delete && aws cloudfront create-invalidation --distribution-id $(aws cloudfront list-distributions --query \"DistributionList.Items[?contains(Aliases.Items, 'doc-processing-platform.htytun.com')].Id\" --output text) --paths \"/*\""
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

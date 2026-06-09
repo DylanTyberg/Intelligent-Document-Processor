@@ -1,11 +1,12 @@
-import { Outlet, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { Outlet, Link, useNavigate, useMatch } from "react-router-dom";
 
 const Layout = () => {
     const navigate = useNavigate();
     const { user, loading, logout } = useAuth();
+    const isDocumentDetail = useMatch("/documents/:id");
 
     const handleSignOut = async () => {
         await logout();
@@ -42,11 +43,12 @@ const Layout = () => {
                     </div>
                 </div>
             </header>
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <main className={isDocumentDetail ? "" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6"}>
                 <Outlet />
             </main>
         </div>
     );
 };
+
 
 export default Layout;
