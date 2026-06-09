@@ -1,5 +1,5 @@
 import { Construct } from "constructs";
-import { Duration } from "aws-cdk-lib";
+import { Duration, Stack } from "aws-cdk-lib";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as cognito from "aws-cdk-lib/aws-cognito";
@@ -9,6 +9,9 @@ import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as events from "aws-cdk-lib/aws-events";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import { SqsQueue } from "aws-cdk-lib/aws-events-targets";
+import * as sns from "aws-cdk-lib/aws-sns";
+import * as iam from "aws-cdk-lib/aws-iam";
+import * as wafv2 from "aws-cdk-lib/aws-wafv2";
 
 interface ApiConstructProps {
   userPool: cognito.UserPool;
@@ -18,6 +21,9 @@ interface ApiConstructProps {
   encryptionKey: kms.Key;
   eventBus: events.EventBus;
   piiQueue: sqs.Queue;
+  summarizationQueue: sqs.Queue;
+  textractTopic: sns.Topic;
+  textractRole: iam.Role;
 }
 
 export class ApiConstruct extends Construct {
@@ -52,6 +58,89 @@ export class ApiConstruct extends Construct {
       },
     });
 
+    // --- WAF ---
+
+    const waf = new wafv2.CfnWebACL(this, "ApiWaf", {
+      scope: "REGIONAL",
+      defaultAction: { allow: {} },
+      visibilityConfig: {
+        cloudWatchMetricsEnabled: true,
+        metricName: "ApiWaf",
+        sampledRequestsEnabled: true,
+      },
+      rules: [
+        {
+          name: "AWSManagedRulesCommonRuleSet",
+          priority: 1,
+          overrideAction: { none: {} },
+          visibilityConfig: {
+            cloudWatchMetricsEnabled: true,
+            metricName: "CommonRuleSet",
+            sampledRequestsEnabled: true,
+          },
+          statement: {
+            managedRuleGroupStatement: {
+              vendorName: "AWS",
+              name: "AWSManagedRulesCommonRuleSet",
+            },
+          },
+        },
+        {
+          name: "AWSManagedRulesKnownBadInputsRuleSet",
+          priority: 2,
+          overrideAction: { none: {} },
+          visibilityConfig: {
+            cloudWatchMetricsEnabled: true,
+            metricName: "KnownBadInputs",
+            sampledRequestsEnabled: true,
+          },
+          statement: {
+            managedRuleGroupStatement: {
+              vendorName: "AWS",
+              name: "AWSManagedRulesKnownBadInputsRuleSet",
+            },
+          },
+        },
+        {
+          name: "AWSManagedRulesAmazonIpReputationList",
+          priority: 3,
+          overrideAction: { none: {} },
+          visibilityConfig: {
+            cloudWatchMetricsEnabled: true,
+            metricName: "IpReputationList",
+            sampledRequestsEnabled: true,
+          },
+          statement: {
+            managedRuleGroupStatement: {
+              vendorName: "AWS",
+              name: "AWSManagedRulesAmazonIpReputationList",
+            },
+          },
+        },
+        {
+          name: "RateLimitRule",
+          priority: 4,
+          action: { block: {} },
+          visibilityConfig: {
+            cloudWatchMetricsEnabled: true,
+            metricName: "RateLimit",
+            sampledRequestsEnabled: true,
+          },
+          statement: {
+            rateBasedStatement: {
+              limit: 100,
+              aggregateKeyType: "IP",
+            },
+          },
+        },
+      ],
+    });
+
+    new wafv2.CfnWebACLAssociation(this, "ApiWafAssociation", {
+      resourceArn: `arn:aws:apigateway:${Stack.of(this).region}::/restapis/${this.api.restApiId}/stages/${this.api.deploymentStage.stageName}`,
+      webAclArn: waf.attrArn,
+    });
+
     // --- Lambda Handlers ---
 
     // Generates a presigned S3 upload URL and creates initial DynamoDB record
@@ -78,8 +167,17 @@ export class ApiConstruct extends Construct {
         TABLE_NAME: props.table.tableName,
         EVENT_BUS_NAME: props.eventBus.eventBusName,
         PII_QUEUE_URL: props.piiQueue.queueUrl,
+        SUM_QUEUE_URL: props.summarizationQueue.queueUrl,
+        TEXTRACT_SNS_TOPIC_ARN: props.textractTopic.topicArn,
+        TEXTRACT_ROLE_ARN: props.textractRole.roleArn,
+        UPLOAD_BUCKET: props.uploadBucket.bucketName,
       },
     });
+
+    processLambda.addToRolePolicy(new iam.PolicyStatement({
+      actions: ["textract:StartDocumentAnalysis"],
+      resources: ["*"],
+    }));
 
     // Returns list of documents or a single document for a user
     const getDocumentsLambda = new lambda.Function(this, "GetDocumentsLambda", {
@@ -118,6 +216,7 @@ export class ApiConstruct extends Construct {
         environment: {
           TABLE_NAME: props.table.tableName,
           UPLOAD_BUCKET: props.uploadBucket.bucketName,
+          RESULTS_BUCKET: props.resultsBucket.bucketName,
         },
       }
     );
@@ -181,28 +280,33 @@ export class ApiConstruct extends Construct {
     props.resultsBucket.grantDelete(deleteDocumentLambda);
     props.table.grantReadWriteData(deleteDocumentLambda);
 
+    props.resultsBucket.grantRead(getDocumentLambda);
+
     props.piiQueue.grantSendMessages(processLambda);
+    props.summarizationQueue.grantSendMessages(processLambda);
+    props.uploadBucket.grantRead(processLambda);
+    props.encryptionKey.grantDecrypt(processLambda);
 
     // --- API Routes ---
 
     const documents = this.api.root.addResource("documents");
 
     // POST /documents — get presigned upload URL + create DynamoDB record
-    documents.addMethod("GET", new apigateway.LambdaIntegration(getDocumentsLambda), {/*authOptions*/});
-    documents.addMethod("POST", new apigateway.LambdaIntegration(uploadLambda), {/*authOptions*/});
+    documents.addMethod("GET", new apigateway.LambdaIntegration(getDocumentsLambda), authOptions);
+    documents.addMethod("POST", new apigateway.LambdaIntegration(uploadLambda), authOptions);
 
     const singleDocument = documents.addResource("{documentId}");
 
     // GET /documents/{documentId} — get document metadata
-    singleDocument.addMethod("GET", new apigateway.LambdaIntegration(getDocumentLambda), {/*authOptions*/});
+    singleDocument.addMethod("GET", new apigateway.LambdaIntegration(getDocumentLambda), authOptions);
     // PUT /documents/{documentId} — update document metadata
     singleDocument.addMethod("PUT", new apigateway.LambdaIntegration(updateDocumentLambda), authOptions);
     // DELETE /documents/{documentId} — delete document and all associated data
-    singleDocument.addMethod("DELETE", new apigateway.LambdaIntegration(deleteDocumentLambda), {/*authOptions*/});
+    singleDocument.addMethod("DELETE", new apigateway.LambdaIntegration(deleteDocumentLambda), authOptions);
 
     // POST /documents/{documentId}/process — trigger processing on existing document
     const processResource = singleDocument.addResource("process");
-    processResource.addMethod("POST", new apigateway.LambdaIntegration(processLambda), {/*authOptions*/});
+    processResource.addMethod("POST", new apigateway.LambdaIntegration(processLambda), authOptions);
 
     // GET /documents/{documentId}/results — get processing results
     const resultsResource = singleDocument.addResource("results");

@@ -9,6 +9,8 @@ import * as kms from "aws-cdk-lib/aws-kms";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import * as iam from "aws-cdk-lib/aws-iam";
+import * as sns from "aws-cdk-lib/aws-sns";
+import * as sns_subscriptions from "aws-cdk-lib/aws-sns-subscriptions";
 
 interface ProcessingConstructProps {
   uploadBucket: s3.Bucket;
@@ -22,6 +24,9 @@ export class ProcessingConstruct extends Construct {
   public readonly piiQueue: sqs.Queue;
   public readonly summarizationQueue: sqs.Queue;
   public readonly analysisQueue: sqs.Queue;
+  public readonly redactionQueue: sqs.Queue;
+  public readonly textractTopic: sns.Topic;
+  public readonly textractRole: iam.Role;
 
   constructor(scope: Construct, id: string, props: ProcessingConstructProps) {
     super(scope, id);
@@ -77,6 +82,55 @@ export class ProcessingConstruct extends Construct {
     });
 
     this.summarizationQueue = summarizationQueue;
+
+    // --- Redaction Path ---
+
+    const redactionDlq = new sqs.Queue(this, "RedactionDlq", {
+      retentionPeriod: Duration.days(14),
+    });
+
+    const redactionQueue = new sqs.Queue(this, "RedactionQueue", {
+      visibilityTimeout: Duration.seconds(300),
+      deadLetterQueue: {
+        queue: redactionDlq,
+        maxReceiveCount: 3,
+      },
+    });
+
+    this.redactionQueue = redactionQueue;
+
+    const textractTopic = new sns.Topic(this, "TextractCompletionTopic");
+
+    textractTopic.addSubscription(
+      new sns_subscriptions.SqsSubscription(redactionQueue)
+    );
+
+    // IAM role that Textract assumes to publish to SNS
+    const textractRole = new iam.Role(this, "TextractSnsRole", {
+      assumedBy: new iam.ServicePrincipal("textract.amazonaws.com"),
+      inlinePolicies: {
+        TextractSnsPublish: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              actions: ["sns:Publish"],
+              resources: [textractTopic.topicArn],
+            }),
+            // ADD THESE:
+            new iam.PolicyStatement({
+              actions: ["s3:GetObject"],
+              resources: [`${props.uploadBucket.bucketArn}/*`],
+            }),
+            new iam.PolicyStatement({
+              actions: ["kms:Decrypt", "kms:GenerateDataKey"],
+              resources: [props.encryptionKey.keyArn],
+            }),
+          ],
+        }),
+      },
+    });
+
+    this.textractTopic = textractTopic;
+    this.textractRole = textractRole;
 
     // --- EventBridge Rules ---
 
@@ -159,7 +213,7 @@ export class ProcessingConstruct extends Construct {
 
     summarizationLambda.addToRolePolicy(new iam.PolicyStatement({
       actions: ["bedrock:InvokeModel"],
-      resources: ["arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0"],
+      resources: ["*"],
     }));
 
     // const analysisLambda = new lambda.Function(this, "AnalysisLambda", {
@@ -169,6 +223,27 @@ export class ProcessingConstruct extends Construct {
     //   timeout: Duration.seconds(120),
     //   memorySize: 512,
     // });
+
+    const redactionLambda = new lambda.Function(this, "RedactionLambda", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: "index.handler",
+      code: lambda.Code.fromAsset("lambdas/redaction"),
+      timeout: Duration.seconds(300),
+      memorySize: 1024,
+      environment: {
+        TABLE_NAME: props.table.tableName,
+        UPLOAD_BUCKET: props.uploadBucket.bucketName,
+        RESULTS_BUCKET: props.resultsBucket.bucketName,
+      },
+    });
+
+    redactionLambda.addToRolePolicy(new iam.PolicyStatement({
+      actions: [
+        "textract:GetDocumentAnalysis",
+        "textract:GetDocumentTextDetection",
+      ],
+      resources: ["*"],
+    }));
 
     // --- Permissions (uncomment when Lambdas are active) ---
 
@@ -195,6 +270,14 @@ export class ProcessingConstruct extends Construct {
     // Wire SQS as Lambda event sources
      piiLambda.addEventSource(new SqsEventSource(piiQueue, { batchSize: 1 }));
     // analysisLambda.addEventSource(new SqsEventSource(analysisQueue, { batchSize: 1 }));
-     summarizationLambda.addEventSource(new SqsEventSource(summarizationQueue, { batchSize: 1 }));
+    summarizationLambda.addEventSource(new SqsEventSource(summarizationQueue, { batchSize: 1 }));
+
+    props.uploadBucket.grantRead(redactionLambda);
+    props.resultsBucket.grantReadWrite(redactionLambda);
+    props.table.grantReadWriteData(redactionLambda);
+    props.encryptionKey.grantDecrypt(redactionLambda);
+    props.encryptionKey.grantEncrypt(redactionLambda);
+
+    redactionLambda.addEventSource(new SqsEventSource(redactionQueue, { batchSize: 1 }));
   }
 }

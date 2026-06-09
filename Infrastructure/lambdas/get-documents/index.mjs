@@ -8,7 +8,7 @@ const db = DynamoDBDocumentClient.from(client);
 export const handler = async (event) => {
   try {
 
-    const { userId }  = event.queryStringParameters;
+    const userId = event.requestContext.authorizer.claims.sub;
     
     const { Items }  = await db.send(new QueryCommand({
       TableName: process.env.TABLE_NAME,
